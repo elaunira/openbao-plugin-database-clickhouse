@@ -1,0 +1,347 @@
+// Copyright (c) 2024 Elaunira
+// SPDX-License-Identifier: MPL-2.0
+
+package clickhouse
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"net/url"
+	"regexp"
+	"testing"
+	"time"
+
+	_ "github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/openbao/openbao/sdk/v2/database/dbplugin/v5"
+	clickhousehelper "github.com/elaunira/openbao-plugin-database-clickhouse/testhelpers/clickhouse"
+	"github.com/stretchr/testify/require"
+)
+
+const (
+	testAdminUser     = "default"
+	testAdminPassword = "password"
+	testRole          = "testrole"
+)
+
+func TestClickhouse_Initialize(t *testing.T) {
+	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
+	defer cleanup()
+
+	parsed, err := url.Parse(connURL)
+	require.NoError(t, err)
+
+	db := new(testAdminUser, testAdminPassword)
+
+	req := dbplugin.InitializeRequest{
+		Config: map[string]interface{}{
+			"connection_url": connURL,
+		},
+		VerifyConnection: true,
+	}
+
+	_, err = db.Initialize(context.Background(), req)
+	require.NoError(t, err)
+
+	require.NotNil(t, db.(*dbplugin.DatabaseErrorSanitizerMiddleware))
+
+	t.Logf("Connected to ClickHouse at %s", parsed.Host)
+}
+
+func TestClickhouse_Initialize_WithHostPort(t *testing.T) {
+	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
+	defer cleanup()
+
+	parsed, err := url.Parse(connURL)
+	require.NoError(t, err)
+
+	db := new(testAdminUser, testAdminPassword)
+
+	req := dbplugin.InitializeRequest{
+		Config: map[string]interface{}{
+			"host":     parsed.Hostname(),
+			"port":     9000,
+			"username": testAdminUser,
+			"password": testAdminPassword,
+		},
+		VerifyConnection: true,
+	}
+
+	_, err = db.Initialize(context.Background(), req)
+	require.NoError(t, err)
+}
+
+func TestClickhouse_NewUser(t *testing.T) {
+	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
+	defer cleanup()
+
+	db := new(testAdminUser, testAdminPassword)
+
+	req := dbplugin.InitializeRequest{
+		Config: map[string]interface{}{
+			"connection_url": connURL,
+		},
+		VerifyConnection: true,
+	}
+
+	_, err := db.Initialize(context.Background(), req)
+	require.NoError(t, err)
+
+	password := "testpassword123"
+	expiration := time.Now().Add(time.Hour)
+
+	newUserReq := dbplugin.NewUserRequest{
+		UsernameConfig: dbplugin.UsernameMetadata{
+			DisplayName: "token",
+			RoleName:    testRole,
+		},
+		Statements: dbplugin.Statements{
+			Commands: []string{
+				"CREATE USER IF NOT EXISTS '{{name}}' IDENTIFIED BY '{{password}}'",
+			},
+		},
+		Password:   password,
+		Expiration: expiration,
+	}
+
+	resp, err := db.NewUser(context.Background(), newUserReq)
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.Username)
+
+	// Verify username format
+	matched, err := regexp.MatchString(`^v-token-testrole-[a-zA-Z0-9]{15,}`, resp.Username)
+	require.NoError(t, err)
+	require.True(t, matched, "username %q doesn't match expected pattern", resp.Username)
+
+	// Verify the user can connect
+	testConnURL := buildTestConnURL(connURL, resp.Username, password)
+	err = clickhousehelper.TestCredsExist(t, testConnURL)
+	require.NoError(t, err)
+
+	t.Logf("Created user: %s", resp.Username)
+}
+
+func TestClickhouse_DeleteUser(t *testing.T) {
+	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
+	defer cleanup()
+
+	db := new(testAdminUser, testAdminPassword)
+
+	req := dbplugin.InitializeRequest{
+		Config: map[string]interface{}{
+			"connection_url": connURL,
+		},
+		VerifyConnection: true,
+	}
+
+	_, err := db.Initialize(context.Background(), req)
+	require.NoError(t, err)
+
+	password := "testpassword123"
+	expiration := time.Now().Add(time.Hour)
+
+	// Create a user first
+	newUserReq := dbplugin.NewUserRequest{
+		UsernameConfig: dbplugin.UsernameMetadata{
+			DisplayName: "token",
+			RoleName:    testRole,
+		},
+		Statements: dbplugin.Statements{
+			Commands: []string{
+				"CREATE USER IF NOT EXISTS '{{name}}' IDENTIFIED BY '{{password}}'",
+			},
+		},
+		Password:   password,
+		Expiration: expiration,
+	}
+
+	resp, err := db.NewUser(context.Background(), newUserReq)
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.Username)
+
+	// Verify the user can connect
+	testConnURL := buildTestConnURL(connURL, resp.Username, password)
+	err = clickhousehelper.TestCredsExist(t, testConnURL)
+	require.NoError(t, err)
+
+	// Delete the user
+	deleteReq := dbplugin.DeleteUserRequest{
+		Username: resp.Username,
+	}
+
+	_, err = db.DeleteUser(context.Background(), deleteReq)
+	require.NoError(t, err)
+
+	// Verify the user can no longer connect
+	err = clickhousehelper.TestCredsExist(t, testConnURL)
+	require.Error(t, err)
+
+	t.Logf("Deleted user: %s", resp.Username)
+}
+
+func TestClickhouse_UpdateUser(t *testing.T) {
+	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
+	defer cleanup()
+
+	db := new(testAdminUser, testAdminPassword)
+
+	req := dbplugin.InitializeRequest{
+		Config: map[string]interface{}{
+			"connection_url": connURL,
+		},
+		VerifyConnection: true,
+	}
+
+	_, err := db.Initialize(context.Background(), req)
+	require.NoError(t, err)
+
+	password := "testpassword123"
+	expiration := time.Now().Add(time.Hour)
+
+	// Create a user first
+	newUserReq := dbplugin.NewUserRequest{
+		UsernameConfig: dbplugin.UsernameMetadata{
+			DisplayName: "token",
+			RoleName:    testRole,
+		},
+		Statements: dbplugin.Statements{
+			Commands: []string{
+				"CREATE USER IF NOT EXISTS '{{name}}' IDENTIFIED BY '{{password}}'",
+			},
+		},
+		Password:   password,
+		Expiration: expiration,
+	}
+
+	resp, err := db.NewUser(context.Background(), newUserReq)
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.Username)
+
+	// Update the password
+	newPassword := "newpassword456"
+	updateReq := dbplugin.UpdateUserRequest{
+		Username: resp.Username,
+		Password: &dbplugin.ChangePassword{
+			NewPassword: newPassword,
+		},
+	}
+
+	_, err = db.UpdateUser(context.Background(), updateReq)
+	require.NoError(t, err)
+
+	// Verify old password no longer works
+	oldConnURL := buildTestConnURL(connURL, resp.Username, password)
+	err = clickhousehelper.TestCredsExist(t, oldConnURL)
+	require.Error(t, err)
+
+	// Verify new password works
+	newConnURL := buildTestConnURL(connURL, resp.Username, newPassword)
+	err = clickhousehelper.TestCredsExist(t, newConnURL)
+	require.NoError(t, err)
+
+	t.Logf("Updated password for user: %s", resp.Username)
+}
+
+func TestClickhouse_UpdateUser_NoChanges(t *testing.T) {
+	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
+	defer cleanup()
+
+	db := new(testAdminUser, testAdminPassword)
+
+	req := dbplugin.InitializeRequest{
+		Config: map[string]interface{}{
+			"connection_url": connURL,
+		},
+		VerifyConnection: true,
+	}
+
+	_, err := db.Initialize(context.Background(), req)
+	require.NoError(t, err)
+
+	// Try to update with no changes
+	updateReq := dbplugin.UpdateUserRequest{
+		Username: "testuser",
+	}
+
+	_, err = db.UpdateUser(context.Background(), updateReq)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no changes requested")
+}
+
+func TestNew(t *testing.T) {
+	f := New(DefaultUserNameTemplate(), "1.0.0")
+	db, err := f()
+	require.NoError(t, err)
+	require.NotNil(t, db)
+
+	dbImpl, ok := db.(dbplugin.Database)
+	require.True(t, ok)
+
+	typeName, err := dbImpl.Type()
+	require.NoError(t, err)
+	require.Equal(t, "clickhouse", typeName)
+}
+
+func TestClickhouse_NewUser_WithRoleAssignment(t *testing.T) {
+	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
+	defer cleanup()
+
+	db := new(testAdminUser, testAdminPassword)
+
+	req := dbplugin.InitializeRequest{
+		Config: map[string]interface{}{
+			"connection_url": connURL,
+		},
+		VerifyConnection: true,
+	}
+
+	_, err := db.Initialize(context.Background(), req)
+	require.NoError(t, err)
+
+	// Create a role first
+	adminDB, err := sql.Open("clickhouse", connURL)
+	require.NoError(t, err)
+	defer adminDB.Close()
+
+	_, err = adminDB.Exec("CREATE ROLE IF NOT EXISTS test_reader")
+	require.NoError(t, err)
+
+	password := "testpassword123"
+	expiration := time.Now().Add(time.Hour)
+
+	newUserReq := dbplugin.NewUserRequest{
+		UsernameConfig: dbplugin.UsernameMetadata{
+			DisplayName: "token",
+			RoleName:    testRole,
+		},
+		Statements: dbplugin.Statements{
+			Commands: []string{
+				"CREATE USER IF NOT EXISTS '{{name}}' IDENTIFIED BY '{{password}}'",
+				"GRANT test_reader TO '{{name}}'",
+			},
+		},
+		Password:   password,
+		Expiration: expiration,
+	}
+
+	resp, err := db.NewUser(context.Background(), newUserReq)
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.Username)
+
+	t.Logf("Created user with role: %s", resp.Username)
+}
+
+func new(adminUser, adminPassword string) dbplugin.Database {
+	f := New(DefaultUserNameTemplate(), "test")
+	db, _ := f()
+	return db.(dbplugin.Database)
+}
+
+func buildTestConnURL(baseURL, username, password string) string {
+	parsed, _ := url.Parse(baseURL)
+	q := parsed.Query()
+	q.Set("username", username)
+	q.Set("password", password)
+	parsed.RawQuery = q.Encode()
+	return parsed.String()
+}
