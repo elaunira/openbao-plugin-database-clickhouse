@@ -336,6 +336,282 @@ func TestClickhouse_NewUser_WithRoleAssignment(t *testing.T) {
 	t.Logf("Created user with role: %s", resp.Username)
 }
 
+func TestClickhouse_UpdateUser_WithExpiration(t *testing.T) {
+	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
+	defer cleanup()
+
+	db := newTestDB(testAdminUser, testAdminPassword)
+
+	req := dbplugin.InitializeRequest{
+		Config: map[string]interface{}{
+			"connection_url": connURL,
+		},
+		VerifyConnection: true,
+	}
+
+	_, err := db.Initialize(context.Background(), req)
+	require.NoError(t, err)
+
+	password := testPassword
+	expiration := time.Now().Add(time.Hour)
+
+	// Create a user first
+	newUserReq := dbplugin.NewUserRequest{
+		UsernameConfig: dbplugin.UsernameMetadata{
+			DisplayName: "token",
+			RoleName:    testRole,
+		},
+		Statements: dbplugin.Statements{
+			Commands: []string{
+				"CREATE USER IF NOT EXISTS '{{name}}' IDENTIFIED BY '{{password}}'",
+			},
+		},
+		Password:   password,
+		Expiration: expiration,
+	}
+
+	resp, err := db.NewUser(context.Background(), newUserReq)
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.Username)
+
+	// Update expiration with a custom statement
+	newExpiration := time.Now().Add(2 * time.Hour)
+	updateReq := dbplugin.UpdateUserRequest{
+		Username: resp.Username,
+		Expiration: &dbplugin.ChangeExpiration{
+			NewExpiration: newExpiration,
+			Statements: dbplugin.Statements{
+				Commands: []string{
+					"ALTER USER '{{name}}' VALID UNTIL '{{expiration}}'",
+				},
+			},
+		},
+	}
+
+	_, err = db.UpdateUser(context.Background(), updateReq)
+	require.NoError(t, err)
+
+	t.Logf("Updated expiration for user: %s", resp.Username)
+}
+
+func TestClickhouse_UpdateUser_ExpirationNoStatements(t *testing.T) {
+	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
+	defer cleanup()
+
+	db := newTestDB(testAdminUser, testAdminPassword)
+
+	req := dbplugin.InitializeRequest{
+		Config: map[string]interface{}{
+			"connection_url": connURL,
+		},
+		VerifyConnection: true,
+	}
+
+	_, err := db.Initialize(context.Background(), req)
+	require.NoError(t, err)
+
+	password := testPassword
+	expiration := time.Now().Add(time.Hour)
+
+	// Create a user first
+	newUserReq := dbplugin.NewUserRequest{
+		UsernameConfig: dbplugin.UsernameMetadata{
+			DisplayName: "token",
+			RoleName:    testRole,
+		},
+		Statements: dbplugin.Statements{
+			Commands: []string{
+				"CREATE USER IF NOT EXISTS '{{name}}' IDENTIFIED BY '{{password}}'",
+			},
+		},
+		Password:   password,
+		Expiration: expiration,
+	}
+
+	resp, err := db.NewUser(context.Background(), newUserReq)
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.Username)
+
+	// Update expiration without statements (should be a no-op)
+	newExpiration := time.Now().Add(2 * time.Hour)
+	updateReq := dbplugin.UpdateUserRequest{
+		Username: resp.Username,
+		Expiration: &dbplugin.ChangeExpiration{
+			NewExpiration: newExpiration,
+		},
+	}
+
+	_, err = db.UpdateUser(context.Background(), updateReq)
+	require.NoError(t, err)
+
+	t.Logf("Expiration update with no statements succeeded for user: %s", resp.Username)
+}
+
+func TestClickhouse_Initialize_TLS(t *testing.T) {
+	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, true, testAdminUser, testAdminPassword)
+	defer cleanup()
+
+	db := newTestDB(testAdminUser, testAdminPassword)
+
+	req := dbplugin.InitializeRequest{
+		Config: map[string]interface{}{
+			"connection_url": connURL,
+		},
+		VerifyConnection: true,
+	}
+
+	_, err := db.Initialize(context.Background(), req)
+	require.NoError(t, err)
+
+	t.Logf("Connected to ClickHouse with TLS")
+}
+
+func TestClickhouse_Type(t *testing.T) {
+	f := New(DefaultUserNameTemplate(), "1.2.3")
+	db, err := f()
+	require.NoError(t, err)
+
+	clickhouseDB := db.(dbplugin.Database)
+	typeName, err := clickhouseDB.Type()
+	require.NoError(t, err)
+	require.Equal(t, "clickhouse", typeName)
+}
+
+func TestClickhouse_Close(t *testing.T) {
+	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
+	defer cleanup()
+
+	db := newTestDB(testAdminUser, testAdminPassword)
+
+	req := dbplugin.InitializeRequest{
+		Config: map[string]interface{}{
+			"connection_url": connURL,
+		},
+		VerifyConnection: true,
+	}
+
+	_, err := db.Initialize(context.Background(), req)
+	require.NoError(t, err)
+
+	// Close the database
+	err = db.Close()
+	require.NoError(t, err)
+
+	// Closing again should not error
+	err = db.Close()
+	require.NoError(t, err)
+}
+
+func TestClickhouse_NewUser_MultipleStatements(t *testing.T) {
+	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
+	defer cleanup()
+
+	db := newTestDB(testAdminUser, testAdminPassword)
+
+	req := dbplugin.InitializeRequest{
+		Config: map[string]interface{}{
+			"connection_url": connURL,
+		},
+		VerifyConnection: true,
+	}
+
+	_, err := db.Initialize(context.Background(), req)
+	require.NoError(t, err)
+
+	// Create a role first
+	adminDB, err := sql.Open("clickhouse", connURL)
+	require.NoError(t, err)
+	defer func() { _ = adminDB.Close() }()
+
+	_, err = adminDB.ExecContext(context.Background(), "CREATE ROLE IF NOT EXISTS multi_test_role")
+	require.NoError(t, err)
+
+	password := testPassword
+	expiration := time.Now().Add(time.Hour)
+
+	// Test multiple statements in a single command (semicolon separated)
+	newUserReq := dbplugin.NewUserRequest{
+		UsernameConfig: dbplugin.UsernameMetadata{
+			DisplayName: "token",
+			RoleName:    testRole,
+		},
+		Statements: dbplugin.Statements{
+			Commands: []string{
+				"CREATE USER IF NOT EXISTS '{{name}}' IDENTIFIED BY '{{password}}'; GRANT multi_test_role TO '{{name}}'",
+			},
+		},
+		Password:   password,
+		Expiration: expiration,
+	}
+
+	resp, err := db.NewUser(context.Background(), newUserReq)
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.Username)
+
+	t.Logf("Created user with multiple statements: %s", resp.Username)
+}
+
+func Test_splitStatements(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name:     "single statement",
+			input:    "CREATE USER 'test'",
+			expected: []string{"CREATE USER 'test'"},
+		},
+		{
+			name:     "multiple statements",
+			input:    "CREATE USER 'test'; GRANT role TO 'test'",
+			expected: []string{"CREATE USER 'test'", "GRANT role TO 'test'"},
+		},
+		{
+			name:     "semicolon in single quotes",
+			input:    "CREATE USER 'test;user' IDENTIFIED BY 'pass;word'",
+			expected: []string{"CREATE USER 'test;user' IDENTIFIED BY 'pass;word'"},
+		},
+		{
+			name:     "semicolon in double quotes",
+			input:    `CREATE USER "test;user" IDENTIFIED BY "pass;word"`,
+			expected: []string{`CREATE USER "test;user" IDENTIFIED BY "pass;word"`},
+		},
+		{
+			name:     "mixed quotes with semicolons",
+			input:    `CREATE USER 'test;user'; GRANT "role;name" TO 'test;user'`,
+			expected: []string{`CREATE USER 'test;user'`, `GRANT "role;name" TO 'test;user'`},
+		},
+		{
+			name:     "empty input",
+			input:    "",
+			expected: nil,
+		},
+		{
+			name:     "only whitespace",
+			input:    "   ",
+			expected: nil,
+		},
+		{
+			name:     "trailing semicolon",
+			input:    "CREATE USER 'test';",
+			expected: []string{"CREATE USER 'test'"},
+		},
+		{
+			name:     "multiple semicolons",
+			input:    "SELECT 1;; SELECT 2",
+			expected: []string{"SELECT 1", "SELECT 2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := splitStatements(tt.input)
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func newTestDB(_, _ string) dbplugin.Database {
 	f := New(DefaultUserNameTemplate(), "test")
 	db, _ := f()
