@@ -25,7 +25,7 @@ func genCACertificates(savePath string) error {
 
 	// Create directory if it doesn't exist
 	certPath := path.Join(cwd, savePath)
-	if err := os.MkdirAll(certPath, 0750); err != nil {
+	if err := os.MkdirAll(certPath, 0o750); err != nil {
 		return err
 	}
 

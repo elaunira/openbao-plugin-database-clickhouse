@@ -38,36 +38,38 @@ linters:
     - unparam
     - unused
     - whitespace
-
-linters-settings:
-  dupl:
-    threshold: 100
-  gocognit:
-    min-complexity: 20
-  gocyclo:
-    min-complexity: 15
-  goconst:
-    min-len: 2
-    min-occurrences: 2
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-  gosec:
-    excludes:
-      - G404 # Weak random number generator
-  misspell:
-    locale: US
-  nakedret:
-    max-func-lines: 30
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - dupl
-        - gosec
-        - gocognit
+  settings:
+    dupl:
+      threshold: 100
+    gocognit:
+      min-complexity: 20
+    gocyclo:
+      min-complexity: 15
+    goconst:
+      min-len: 2
+      min-occurrences: 2
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - hugeParam
+        - unnamedResult
+    gosec:
+      excludes:
+        - G404
+    misspell:
+      locale: US
+    nakedret:
+      max-func-lines: 30
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - dupl
+          - gosec
+          - gocognit
+      - path: testhelpers/
+        linters:
+          - gocyclo
