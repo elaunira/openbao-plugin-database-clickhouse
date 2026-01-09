@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"net/url"
 	"regexp"
+	"strconv"
 	"testing"
 	"time"
 
@@ -56,12 +57,15 @@ func TestClickhouse_Initialize_WithHostPort(t *testing.T) {
 	parsed, err := url.Parse(connURL)
 	require.NoError(t, err)
 
+	port, err := strconv.Atoi(parsed.Port())
+	require.NoError(t, err)
+
 	db := newTestDB(testAdminUser, testAdminPassword)
 
 	req := dbplugin.InitializeRequest{
 		Config: map[string]interface{}{
 			"host":     parsed.Hostname(),
-			"port":     9000,
+			"port":     port,
 			"username": testAdminUser,
 			"password": testAdminPassword,
 		},
