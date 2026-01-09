@@ -1,5 +1,10 @@
 version: "2"
 
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
 linters:
   default: none
   enable:
@@ -15,11 +20,8 @@ linters:
     - gocritic
     - gocyclo
     - godot
-    - gofmt
-    - goimports
     - goprintffuncname
     - gosec
-    - gosimple
     - govet
     - ineffassign
     - misspell
@@ -32,8 +34,6 @@ linters:
     - rowserrcheck
     - sqlclosecheck
     - staticcheck
-    - stylecheck
-    - typecheck
     - unconvert
     - unparam
     - unused
@@ -56,8 +56,6 @@ linters-settings:
       - opinionated
       - performance
       - style
-  goimports:
-    local-prefixes: github.com/elaunira/openbao-plugin-database-clickhouse
   gosec:
     excludes:
       - G404 # Weak random number generator

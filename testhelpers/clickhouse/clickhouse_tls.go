@@ -25,7 +25,7 @@ func genCACertificates(savePath string) error {
 
 	// Create directory if it doesn't exist
 	certPath := path.Join(cwd, savePath)
-	if err := os.MkdirAll(certPath, 0755); err != nil {
+	if err := os.MkdirAll(certPath, 0750); err != nil {
 		return err
 	}
 
@@ -57,22 +57,22 @@ func genCACertificates(savePath string) error {
 	}
 
 	// Save CA certificate
-	caCertFile, err := os.Create(path.Join(certPath, "local_ca.crt"))
+	caCertFile, err := os.Create(path.Join(certPath, "local_ca.crt")) //nolint:gosec // Test helper, path is trusted
 	if err != nil {
 		return err
 	}
-	defer caCertFile.Close()
+	defer func() { _ = caCertFile.Close() }()
 
 	if err := pem.Encode(caCertFile, &pem.Block{Type: "CERTIFICATE", Bytes: caCertDER}); err != nil {
 		return err
 	}
 
 	// Save CA key
-	caKeyFile, err := os.Create(path.Join(certPath, "local_ca.key"))
+	caKeyFile, err := os.Create(path.Join(certPath, "local_ca.key")) //nolint:gosec // Test helper, path is trusted
 	if err != nil {
 		return err
 	}
-	defer caKeyFile.Close()
+	defer func() { _ = caKeyFile.Close() }()
 
 	if err := pem.Encode(caKeyFile, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(caKey)}); err != nil {
 		return err
@@ -112,22 +112,22 @@ func genCACertificates(savePath string) error {
 	}
 
 	// Save server certificate
-	serverCertFile, err := os.Create(path.Join(certPath, "localnode.crt"))
+	serverCertFile, err := os.Create(path.Join(certPath, "localnode.crt")) //nolint:gosec // Test helper, path is trusted
 	if err != nil {
 		return err
 	}
-	defer serverCertFile.Close()
+	defer func() { _ = serverCertFile.Close() }()
 
 	if err := pem.Encode(serverCertFile, &pem.Block{Type: "CERTIFICATE", Bytes: serverCertDER}); err != nil {
 		return err
 	}
 
 	// Save server key
-	serverKeyFile, err := os.Create(path.Join(certPath, "localnode.key"))
+	serverKeyFile, err := os.Create(path.Join(certPath, "localnode.key")) //nolint:gosec // Test helper, path is trusted
 	if err != nil {
 		return err
 	}
-	defer serverKeyFile.Close()
+	defer func() { _ = serverKeyFile.Close() }()
 
 	if err := pem.Encode(serverKeyFile, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(serverKey)}); err != nil {
 		return err

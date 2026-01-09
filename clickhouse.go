@@ -1,6 +1,7 @@
 // Copyright (c) 2024 Elaunira
 // SPDX-License-Identifier: MPL-2.0
 
+// Package clickhouse provides an OpenBao database plugin for ClickHouse.
 package clickhouse
 
 import (
@@ -8,7 +9,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/hashicorp/go-secure-stdlib/strutil"
@@ -24,7 +24,7 @@ const (
 	defaultUserNameTemplate = `{{ printf "v-%s-%s-%s-%s" (.DisplayName | truncate 8) (.RoleName | truncate 8) (random 15) (unix_time) | truncate 32 }}`
 
 	defaultRevocationStatement        = `DROP USER IF EXISTS '{{name}}'`
-	defaultRotateCredentialsStatement = `ALTER USER IF EXISTS '{{name}}' IDENTIFIED BY '{{password}}'`
+	defaultRotateCredentialsStatement = `ALTER USER IF EXISTS '{{name}}' IDENTIFIED BY '{{password}}'` //nolint:gosec // Not hardcoded credentials, SQL template
 )
 
 var _ dbplugin.Database = (*Clickhouse)(nil)
@@ -108,7 +108,7 @@ func (c *Clickhouse) Initialize(ctx context.Context, req dbplugin.InitializeRequ
 	}
 	c.usernameProducer = up
 
-	err = c.clickhouseConnectionProducer.Init(ctx, req.Config, req.VerifyConnection)
+	err = c.Init(ctx, req.Config, req.VerifyConnection)
 	if err != nil {
 		return dbplugin.InitializeResponse{}, fmt.Errorf("failed to initialize connection producer: %w", err)
 	}
@@ -315,11 +315,6 @@ func (c *Clickhouse) Close() error {
 	defer c.Unlock()
 
 	return c.clickhouseConnectionProducer.Close()
-}
-
-// clickhouseConnectionProducer mutex wrapper
-type syncMutex struct {
-	sync.Mutex
 }
 
 // ValidateUsername validates the username against a regex pattern.

@@ -101,7 +101,7 @@ func (c *clickhouseConnectionProducer) Connection(ctx context.Context) (*sql.DB,
 			return c.db, nil
 		}
 		// Connection is stale, close it
-		c.db.Close()
+		_ = c.db.Close()
 		c.db = nil
 	}
 
@@ -137,8 +137,10 @@ func (c *clickhouseConnectionProducer) SecretValues() map[string]string {
 	}
 }
 
-// connStringBuilder is a builder for ClickHouse connection strings.
-type connStringBuilder struct {
+const trueVal = "true"
+
+// ConnStringBuilder is a builder for ClickHouse connection strings.
+type ConnStringBuilder struct {
 	host          string
 	port          int
 	database      string
@@ -151,14 +153,14 @@ type connStringBuilder struct {
 }
 
 // newConnStringBuilder creates a new connection string builder.
-func newConnStringBuilder() *connStringBuilder {
-	return &connStringBuilder{
+func newConnStringBuilder() *ConnStringBuilder {
+	return &ConnStringBuilder{
 		extraParams: make(map[string]string),
 	}
 }
 
 // NewConnStringBuilderFromConnString parses an existing connection string.
-func NewConnStringBuilderFromConnString(connString string) (*connStringBuilder, error) {
+func NewConnStringBuilderFromConnString(connString string) (*ConnStringBuilder, error) {
 	builder := newConnStringBuilder()
 
 	u, err := url.Parse(connString)
@@ -196,15 +198,15 @@ func NewConnStringBuilderFromConnString(connString string) (*connStringBuilder, 
 	}
 
 	// Parse TLS settings
-	if q.Get("secure") == "true" {
+	if q.Get("secure") == trueVal {
 		builder.tls = true
 	}
-	if q.Get("skip_verify") == "true" {
+	if q.Get("skip_verify") == trueVal {
 		builder.tlsSkipVerify = true
 	}
 
 	// Parse debug
-	if q.Get("debug") == "true" {
+	if q.Get("debug") == trueVal {
 		builder.debug = true
 	}
 
@@ -212,56 +214,56 @@ func NewConnStringBuilderFromConnString(connString string) (*connStringBuilder, 
 }
 
 // WithHost sets the host.
-func (b *connStringBuilder) WithHost(host string) *connStringBuilder {
+func (b *ConnStringBuilder) WithHost(host string) *ConnStringBuilder {
 	b.host = host
 	return b
 }
 
 // WithPort sets the port.
-func (b *connStringBuilder) WithPort(port int) *connStringBuilder {
+func (b *ConnStringBuilder) WithPort(port int) *ConnStringBuilder {
 	b.port = port
 	return b
 }
 
 // WithDatabase sets the database name.
-func (b *connStringBuilder) WithDatabase(database string) *connStringBuilder {
+func (b *ConnStringBuilder) WithDatabase(database string) *ConnStringBuilder {
 	b.database = database
 	return b
 }
 
 // WithUsername sets the username.
-func (b *connStringBuilder) WithUsername(username string) *connStringBuilder {
+func (b *ConnStringBuilder) WithUsername(username string) *ConnStringBuilder {
 	b.username = username
 	return b
 }
 
 // WithPassword sets the password.
-func (b *connStringBuilder) WithPassword(password string) *connStringBuilder {
+func (b *ConnStringBuilder) WithPassword(password string) *ConnStringBuilder {
 	b.password = password
 	return b
 }
 
 // WithTLS sets TLS configuration.
-func (b *connStringBuilder) WithTLS(tls, skipVerify bool) *connStringBuilder {
+func (b *ConnStringBuilder) WithTLS(tls, skipVerify bool) *ConnStringBuilder {
 	b.tls = tls
 	b.tlsSkipVerify = skipVerify
 	return b
 }
 
 // WithDebug sets debug mode.
-func (b *connStringBuilder) WithDebug(debug bool) *connStringBuilder {
+func (b *ConnStringBuilder) WithDebug(debug bool) *ConnStringBuilder {
 	b.debug = debug
 	return b
 }
 
 // WithExtraParam adds an extra query parameter.
-func (b *connStringBuilder) WithExtraParam(key, value string) *connStringBuilder {
+func (b *ConnStringBuilder) WithExtraParam(key, value string) *ConnStringBuilder {
 	b.extraParams[key] = value
 	return b
 }
 
 // Check validates the connection string builder configuration.
-func (b *connStringBuilder) Check() error {
+func (b *ConnStringBuilder) Check() error {
 	if b.host == "" {
 		return fmt.Errorf("host is required")
 	}
@@ -272,7 +274,7 @@ func (b *connStringBuilder) Check() error {
 }
 
 // BuildConnectionString builds a ClickHouse connection string.
-func (b *connStringBuilder) BuildConnectionString() string {
+func (b *ConnStringBuilder) BuildConnectionString() string {
 	q := make(url.Values)
 
 	if b.username != "" {
@@ -282,13 +284,13 @@ func (b *connStringBuilder) BuildConnectionString() string {
 		q.Set("password", b.password)
 	}
 	if b.tls {
-		q.Set("secure", "true")
+		q.Set("secure", trueVal)
 		if b.tlsSkipVerify {
-			q.Set("skip_verify", "true")
+			q.Set("skip_verify", trueVal)
 		}
 	}
 	if b.debug {
-		q.Set("debug", "true")
+		q.Set("debug", trueVal)
 	}
 
 	for k, v := range b.extraParams {

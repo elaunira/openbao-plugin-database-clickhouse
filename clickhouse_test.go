@@ -12,8 +12,8 @@ import (
 	"time"
 
 	_ "github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/openbao/openbao/sdk/v2/database/dbplugin/v5"
 	clickhousehelper "github.com/elaunira/openbao-plugin-database-clickhouse/testhelpers/clickhouse"
+	"github.com/openbao/openbao/sdk/v2/database/dbplugin/v5"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,6 +21,7 @@ const (
 	testAdminUser     = "default"
 	testAdminPassword = "password"
 	testRole          = "testrole"
+	testPassword      = "testpassword123"
 )
 
 func TestClickhouse_Initialize(t *testing.T) {
@@ -30,7 +31,7 @@ func TestClickhouse_Initialize(t *testing.T) {
 	parsed, err := url.Parse(connURL)
 	require.NoError(t, err)
 
-	db := new(testAdminUser, testAdminPassword)
+	db := newTestDB(testAdminUser, testAdminPassword)
 
 	req := dbplugin.InitializeRequest{
 		Config: map[string]interface{}{
@@ -54,7 +55,7 @@ func TestClickhouse_Initialize_WithHostPort(t *testing.T) {
 	parsed, err := url.Parse(connURL)
 	require.NoError(t, err)
 
-	db := new(testAdminUser, testAdminPassword)
+	db := newTestDB(testAdminUser, testAdminPassword)
 
 	req := dbplugin.InitializeRequest{
 		Config: map[string]interface{}{
@@ -74,7 +75,7 @@ func TestClickhouse_NewUser(t *testing.T) {
 	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
 	defer cleanup()
 
-	db := new(testAdminUser, testAdminPassword)
+	db := newTestDB(testAdminUser, testAdminPassword)
 
 	req := dbplugin.InitializeRequest{
 		Config: map[string]interface{}{
@@ -86,7 +87,7 @@ func TestClickhouse_NewUser(t *testing.T) {
 	_, err := db.Initialize(context.Background(), req)
 	require.NoError(t, err)
 
-	password := "testpassword123"
+	password := testPassword
 	expiration := time.Now().Add(time.Hour)
 
 	newUserReq := dbplugin.NewUserRequest{
@@ -124,7 +125,7 @@ func TestClickhouse_DeleteUser(t *testing.T) {
 	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
 	defer cleanup()
 
-	db := new(testAdminUser, testAdminPassword)
+	db := newTestDB(testAdminUser, testAdminPassword)
 
 	req := dbplugin.InitializeRequest{
 		Config: map[string]interface{}{
@@ -136,7 +137,7 @@ func TestClickhouse_DeleteUser(t *testing.T) {
 	_, err := db.Initialize(context.Background(), req)
 	require.NoError(t, err)
 
-	password := "testpassword123"
+	password := testPassword
 	expiration := time.Now().Add(time.Hour)
 
 	// Create a user first
@@ -182,7 +183,7 @@ func TestClickhouse_UpdateUser(t *testing.T) {
 	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
 	defer cleanup()
 
-	db := new(testAdminUser, testAdminPassword)
+	db := newTestDB(testAdminUser, testAdminPassword)
 
 	req := dbplugin.InitializeRequest{
 		Config: map[string]interface{}{
@@ -194,7 +195,7 @@ func TestClickhouse_UpdateUser(t *testing.T) {
 	_, err := db.Initialize(context.Background(), req)
 	require.NoError(t, err)
 
-	password := "testpassword123"
+	password := testPassword
 	expiration := time.Now().Add(time.Hour)
 
 	// Create a user first
@@ -245,7 +246,7 @@ func TestClickhouse_UpdateUser_NoChanges(t *testing.T) {
 	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
 	defer cleanup()
 
-	db := new(testAdminUser, testAdminPassword)
+	db := newTestDB(testAdminUser, testAdminPassword)
 
 	req := dbplugin.InitializeRequest{
 		Config: map[string]interface{}{
@@ -285,7 +286,7 @@ func TestClickhouse_NewUser_WithRoleAssignment(t *testing.T) {
 	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, false, testAdminUser, testAdminPassword)
 	defer cleanup()
 
-	db := new(testAdminUser, testAdminPassword)
+	db := newTestDB(testAdminUser, testAdminPassword)
 
 	req := dbplugin.InitializeRequest{
 		Config: map[string]interface{}{
@@ -300,12 +301,12 @@ func TestClickhouse_NewUser_WithRoleAssignment(t *testing.T) {
 	// Create a role first
 	adminDB, err := sql.Open("clickhouse", connURL)
 	require.NoError(t, err)
-	defer adminDB.Close()
+	defer func() { _ = adminDB.Close() }()
 
-	_, err = adminDB.Exec("CREATE ROLE IF NOT EXISTS test_reader")
+	_, err = adminDB.ExecContext(context.Background(), "CREATE ROLE IF NOT EXISTS test_reader")
 	require.NoError(t, err)
 
-	password := "testpassword123"
+	password := testPassword
 	expiration := time.Now().Add(time.Hour)
 
 	newUserReq := dbplugin.NewUserRequest{
@@ -330,7 +331,7 @@ func TestClickhouse_NewUser_WithRoleAssignment(t *testing.T) {
 	t.Logf("Created user with role: %s", resp.Username)
 }
 
-func new(adminUser, adminPassword string) dbplugin.Database {
+func newTestDB(_, _ string) dbplugin.Database {
 	f := New(DefaultUserNameTemplate(), "test")
 	db, _ := f()
 	return db.(dbplugin.Database)

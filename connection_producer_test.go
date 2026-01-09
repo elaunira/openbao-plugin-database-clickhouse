@@ -12,7 +12,7 @@ import (
 func Test_connStringBuilder_BuildConnectionString(t *testing.T) {
 	tests := []struct {
 		name     string
-		builder  *connStringBuilder
+		builder  *ConnStringBuilder
 		expected string
 	}{
 		{
@@ -88,7 +88,7 @@ func Test_connStringBuilder_BuildConnectionString(t *testing.T) {
 func Test_connStringBuilder_Check(t *testing.T) {
 	tests := []struct {
 		name      string
-		builder   *connStringBuilder
+		builder   *ConnStringBuilder
 		expectErr bool
 	}{
 		{

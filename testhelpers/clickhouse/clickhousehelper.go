@@ -1,6 +1,7 @@
 // Copyright (c) 2024 Elaunira
 // SPDX-License-Identifier: MPL-2.0
 
+// Package clickhousehelper provides test utilities for ClickHouse integration tests.
 package clickhousehelper
 
 import (
@@ -57,7 +58,7 @@ func PrepareTestContainer(t *testing.T, useTLS bool, adminUser, adminPassword st
 		t.Fatalf("could not start docker clickhouse: %s", err)
 	}
 
-	svc, err := runner.StartService(context.Background(), func(ctx context.Context, host string, port int) (docker.ServiceConfig, error) {
+	svc, err := runner.StartService(context.Background(), func(_ context.Context, host string, port int) (docker.ServiceConfig, error) {
 		hostIP := docker.NewServiceHostPort(host, port)
 		q := make(url.Values)
 		q.Set("username", adminUser)
@@ -78,9 +79,9 @@ func PrepareTestContainer(t *testing.T, useTLS bool, adminUser, adminPassword st
 		if err != nil {
 			return nil, err
 		}
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
-		err = db.Ping()
+		err = db.PingContext(context.Background())
 		if err != nil {
 			return nil, err
 		}
@@ -95,14 +96,14 @@ func PrepareTestContainer(t *testing.T, useTLS bool, adminUser, adminPassword st
 }
 
 // TestCredsExist tests if the provided credentials can connect to ClickHouse.
-func TestCredsExist(t testing.TB, connURL string) error {
+func TestCredsExist(_ testing.TB, connURL string) error {
 	db, err := sql.Open("clickhouse", connURL)
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
-	return db.Ping()
+	return db.PingContext(context.Background())
 }
 
 // BuildConnString builds a connection string from components.
