@@ -43,7 +43,8 @@ func TestClickhouse_Initialize(t *testing.T) {
 	_, err = db.Initialize(context.Background(), req)
 	require.NoError(t, err)
 
-	require.NotNil(t, db.(*dbplugin.DatabaseErrorSanitizerMiddleware))
+	_, ok := db.(dbplugin.DatabaseErrorSanitizerMiddleware)
+	require.True(t, ok, "expected db to be DatabaseErrorSanitizerMiddleware")
 
 	t.Logf("Connected to ClickHouse at %s", parsed.Host)
 }
