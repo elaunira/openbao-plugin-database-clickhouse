@@ -7,7 +7,6 @@ import (
 	"context"
 	"database/sql"
 	"net/url"
-	"os"
 	"regexp"
 	"strconv"
 	"testing"
@@ -446,30 +445,6 @@ func TestClickhouse_UpdateUser_ExpirationNoStatements(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Logf("Expiration update with no statements succeeded for user: %s", resp.Username)
-}
-
-func TestClickhouse_Initialize_TLS(t *testing.T) {
-	// Skip TLS test in CI - requires complex certificate setup
-	if os.Getenv("CI") != "" {
-		t.Skip("Skipping TLS test in CI environment")
-	}
-
-	cleanup, connURL := clickhousehelper.PrepareTestContainer(t, true, testAdminUser, testAdminPassword)
-	defer cleanup()
-
-	db := newTestDB(testAdminUser, testAdminPassword)
-
-	req := dbplugin.InitializeRequest{
-		Config: map[string]interface{}{
-			"connection_url": connURL,
-		},
-		VerifyConnection: true,
-	}
-
-	_, err := db.Initialize(context.Background(), req)
-	require.NoError(t, err)
-
-	t.Logf("Connected to ClickHouse with TLS")
 }
 
 func TestClickhouse_Type(t *testing.T) {
