@@ -1,6 +1,6 @@
 .PHONY: build clean test lint fmt vet
 
-BINARY_NAME=openbao-plugin-database-clickhouse
+BINARY_NAME=clickhouse-database-plugin
 VERSION?=dev
 LDFLAGS=-ldflags "-X main.version=$(VERSION)"
 

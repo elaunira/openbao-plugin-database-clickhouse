@@ -1,5 +1,5 @@
 # Binaries
-openbao-plugin-database-clickhouse
+clickhouse-database-plugin
 *.exe
 *.exe~
 *.dll
