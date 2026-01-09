@@ -6,7 +6,6 @@ package clickhouse
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"net/url"
 	"regexp"
 	"testing"
