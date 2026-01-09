@@ -1,5 +1,5 @@
 # Binaries
-clickhouse-database-plugin
+/clickhouse-database-plugin
 *.exe
 *.exe~
 *.dll
