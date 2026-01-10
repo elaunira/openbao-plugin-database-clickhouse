@@ -76,8 +76,8 @@ func (c *clickhouseConnectionProducer) Init(ctx context.Context, conf map[string
 	} else {
 		// Substitute {{username}} and {{password}} placeholders in connection URL
 		// URL-encode the values to handle special characters
-		c.ConnectionURL = strings.Replace(c.ConnectionURL, "{{username}}", url.PathEscape(c.Username), -1)
-		c.ConnectionURL = strings.Replace(c.ConnectionURL, "{{password}}", url.PathEscape(c.Password), -1)
+		c.ConnectionURL = strings.ReplaceAll(c.ConnectionURL, "{{username}}", url.PathEscape(c.Username))
+		c.ConnectionURL = strings.ReplaceAll(c.ConnectionURL, "{{password}}", url.PathEscape(c.Password))
 	}
 
 	c.initialized = true
