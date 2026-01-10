@@ -34,10 +34,13 @@ git clone https://github.com/elaunira/openbao-plugin-database-clickhouse.git
 cd openbao-plugin-database-clickhouse
 
 # Build the plugin
-go build -o openbao-plugin-database-clickhouse ./cmd/openbao-plugin-database-clickhouse
+make build
+
+# Or with a specific version
+make build VERSION=v2.4.4
 
 # Calculate SHA256 checksum (needed for plugin registration)
-sha256sum openbao-plugin-database-clickhouse
+sha256sum clickhouse-database-plugin
 ```
 
 ## Plugin Registration
@@ -51,10 +54,10 @@ Copy the compiled plugin binary to the OpenBao plugin directory:
 sudo mkdir -p /etc/openbao/plugins
 
 # Copy the plugin
-sudo cp openbao-plugin-database-clickhouse /etc/openbao/plugins/
+sudo cp clickhouse-database-plugin /etc/openbao/plugins/
 
 # Set appropriate permissions
-sudo chmod 755 /etc/openbao/plugins/openbao-plugin-database-clickhouse
+sudo chmod 755 /etc/openbao/plugins/clickhouse-database-plugin
 ```
 
 ### 2. Configure OpenBao
@@ -79,10 +82,10 @@ storage "file" {
 
 ```bash
 # Get the SHA256 checksum of the plugin
-PLUGIN_SHA256=$(sha256sum /etc/openbao/plugins/openbao-plugin-database-clickhouse | cut -d' ' -f1)
+PLUGIN_SHA256=$(sha256sum /etc/openbao/plugins/clickhouse-database-plugin | cut -d' ' -f1)
 
 # Register the plugin
-bao plugin register -sha256=$PLUGIN_SHA256 database openbao-plugin-database-clickhouse
+bao plugin register -sha256=$PLUGIN_SHA256 database clickhouse-database-plugin
 ```
 
 ### 4. Enable the Database Secrets Engine
@@ -97,20 +100,35 @@ bao secrets enable database
 
 ```bash
 bao write database/config/clickhouse \
-    plugin_name=openbao-plugin-database-clickhouse \
+    plugin_name=clickhouse-database-plugin \
     allowed_roles="*" \
-    connection_url="clickhouse://clickhouse.example.com:9000" \
+    connection_url="clickhouse://{{username}}:{{password}}@clickhouse.example.com:9000/default" \
     username="admin" \
     password="admin_password"
 ```
 
 ### Configuration with TLS
 
+For secure connections (port 9440), add `secure=true`:
+
 ```bash
 bao write database/config/clickhouse \
-    plugin_name=openbao-plugin-database-clickhouse \
+    plugin_name=clickhouse-database-plugin \
     allowed_roles="*" \
-    connection_url="clickhouse://clickhouse.example.com:9440?secure=true&skip_verify=false" \
+    connection_url="clickhouse://{{username}}:{{password}}@clickhouse.example.com:9440/default?secure=true" \
+    username="admin" \
+    password="admin_password"
+```
+
+### Configuration with TLS and Skip Verification
+
+For self-signed certificates:
+
+```bash
+bao write database/config/clickhouse \
+    plugin_name=clickhouse-database-plugin \
+    allowed_roles="*" \
+    connection_url="clickhouse://{{username}}:{{password}}@clickhouse.example.com:9440/default?secure=true&skip_verify=true" \
     username="admin" \
     password="admin_password"
 ```
@@ -227,9 +245,9 @@ You can customize the username format using Go template syntax:
 
 ```bash
 bao write database/config/clickhouse \
-    plugin_name=openbao-plugin-database-clickhouse \
+    plugin_name=clickhouse-database-plugin \
     allowed_roles="*" \
-    connection_url="clickhouse://clickhouse.example.com:9000" \
+    connection_url="clickhouse://{{username}}:{{password}}@clickhouse.example.com:9000/default" \
     username="admin" \
     password="admin_password" \
     username_template="{{ printf \"myapp-%s-%s\" (.RoleName | truncate 10) (random 8) }}"
@@ -263,7 +281,7 @@ CLICKHOUSE_URL="clickhouse://localhost:9000?username=default&password=password" 
 Ensure the plugin binary is in the configured plugin directory and has execute permissions:
 
 ```bash
-ls -la /etc/openbao/plugins/openbao-plugin-database-clickhouse
+ls -la /etc/openbao/plugins/clickhouse-database-plugin
 ```
 
 ### Connection errors
