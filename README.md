@@ -94,6 +94,38 @@ bao plugin register -sha256=$PLUGIN_SHA256 database clickhouse-database-plugin
 bao secrets enable database
 ```
 
+## Usage
+
+The plugin is registered and used with the name `clickhouse-database-plugin`. This name is:
+- The binary filename produced by `make build`
+- The name used when registering with `bao plugin register`
+- The value for `plugin_name` in database configuration
+
+Quick reference:
+
+```bash
+# Register the plugin
+bao plugin register -sha256=$PLUGIN_SHA256 database clickhouse-database-plugin
+
+# Configure a connection (plugin_name must be clickhouse-database-plugin)
+bao write database/config/my-clickhouse \
+    plugin_name=clickhouse-database-plugin \
+    allowed_roles="*" \
+    connection_url="clickhouse://{{username}}:{{password}}@localhost:9000/default" \
+    username="admin" \
+    password="secret"
+
+# Create a role
+bao write database/roles/my-role \
+    db_name=my-clickhouse \
+    creation_statements="CREATE USER IF NOT EXISTS '{{name}}' IDENTIFIED BY '{{password}}'" \
+    default_ttl="1h" \
+    max_ttl="24h"
+
+# Generate credentials
+bao read database/creds/my-role
+```
+
 ## Configuration
 
 ### Basic Configuration
